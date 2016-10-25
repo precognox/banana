@@ -469,15 +469,13 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                         var entry_tooltip_value = "" + (angular.isArray(entries[j][$scope.panel.tooltip.field])
                         ? entries[j][$scope.panel.tooltip.field][0]
                         : entries[j][$scope.panel.tooltip.field]);
-                        if (entry_tooltip_value) {
-                          var new_entry = {};
-                          new_entry.value=entry_value;
-                          new_entry.text=entry_tooltip_value;
-                          if (allEntries[entry_time]) {
-                            allEntries[entry_time].push(new_entry);
-                          } else {
-                            allEntries[entry_time]=[new_entry];
-                          }
+                        var new_entry = {};
+                        new_entry.value=entry_value;
+                        new_entry.text=entry_tooltip_value;
+                        if (allEntries[entry_time]) {
+                          allEntries[entry_time].push(new_entry);
+                        } else {
+                          allEntries[entry_time]=[new_entry];
                         }
                       }
                     }
@@ -488,14 +486,13 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                   if ($scope.panel.tooltip.limit) {
                     limit = $scope.panel.tooltip.limit
                   } else {
-                    limit = 15;
+                    limit = $scope.panel.tooltip.limits.length/2;
                   }
                   for (var key in allEntries) {
                     var ended = false;
-                    var entry_array = [];
-                    entry_array = allEntries[key];
-                    if (entry_array.length > 1) {
-                      if ($scope.panel.tooltip.sort && $scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[1]) {
+                    var entry_array = allEntries[key];
+                    if (entry_array.length > 1 && $scope.panel.tooltip.sort) {
+                      if ($scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[1]) { // descending order
                         entry_array.sort(function (a, b) {
                           if (a.value < b.value) {
                             return 1;
@@ -505,7 +502,7 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                           }
                           return 0;
                         });
-                      } else if ($scope.panel.tooltip.sort && $scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[0]) {
+                      } else if ($scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[0]) { // ascending order
                         entry_array.sort(function (a, b) {
                           if (a.value > b.value) {
                             return 1;
@@ -543,10 +540,9 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                     }
                   }
 
-                  var keys = Object.keys(sumValueByDate);
-                  for (var j = 0; j < keys.length; j++) {
-                    time_series.addValue(keys[j], sumValueByDate[keys[j]]);
-                    tooltip_time_series.addValue(keys[j], sumTooltipByDate[keys[j]]);
+                  for (var key in sumValueByDate) {
+                    time_series.addValue(key, sumValueByDate[key]);
+                    tooltip_time_series.addValue(key, sumTooltipByDate[key]);
                   }
                   $scope.data[i] = {
                     info: querySrv.list[id],
@@ -788,10 +784,10 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
           var group, value, field;
           if (item) {
             if (item.series.info.alias || scope.panel.tooltip.query_as_alias) {
-              group = '<small style="font-size:0.9em;">' +
+              group = '<span class="small">' +
                 '<i class="icon-circle" style="color:'+item.series.color+';"></i>' + ' ' +
                 (item.series.info.alias || item.series.info.query)+
-              '</small><br>';
+              '</span><br>';
             } else {
               group = kbn.query_color_dot(item.series.color, 15) + ' ';
             }
@@ -801,9 +797,9 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
               value = item.datapoint[1];
             }
             if (scope.panel.mode === 'summ' && scope.panel.tooltip.field && scope.panel.tooltip.show_field_value) {
-              field = '<small style="font-size:0.9em;">' +
+              field = '<span class="small">' +
               item.series.tooltip_time_series._data[item.datapoint[0]] +
-              '</small><br>';
+              '</span><br>';
             } else {
                 field = '';
             }
