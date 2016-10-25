@@ -3,7 +3,7 @@
       <label class="small">Mode</label>
       <!-- Banana: does not support 'min','mean','max', and 'total' modes yet -->
       <!-- <select ng-change="set_refresh(true)" class="input-small" ng-model="panel.mode" ng-options="f for f in ['count','min','mean','max','total','value']"></select> -->
-      <select ng-change="set_refresh(true)" class="input-small" ng-model="panel.mode" ng-options="f for f in ['count','values']"></select>
+      <select ng-change="set_refresh(true)" class="input-small" ng-model="panel.mode" ng-options="f for f in ['count','values','summ']"></select>
     </div>
     <div class="span2" ng-show="panel.mode != 'count'">
       <label class="small">Value Field</label>
@@ -98,6 +98,24 @@
     <div class="span3">
       <label class="small">Display Query <tip>If an alias is set, it will be shown in the tooltip. If not, should it show the query?</tip></label>
       <input type="checkbox" ng-model="panel.tooltip.query_as_alias" />
+    </div>
+  </div>
+  <div class="row-fluid" ng-show="panel.mode == 'summ'" style="margin-bottom:10px;">
+    <div class="span3">
+      <label class="small">Field <tip>Field to be shown in tooltip.</tip></label>
+      <select ng-change="set_refresh(true)" class="input-medium" ng-model="panel.tooltip.field" ng-options="f for f in fields.list"></select>
+    </div>
+    <div class="span3">
+      <label class="small">Display Field Value<tip>If field is set, show selected filed's values.</tip></label>
+      <input ng-change="set_refresh(true)" type="checkbox" ng-model="panel.tooltip.show_field_value" />
+    </div>
+    <div class="span3">
+      <label class="small">Limit<tip>Limit how many entries the tooltip should show.</tip></label>
+      <select ng-change="set_refresh(true)" class="input-mini" ng-model="panel.tooltip.limit" ng-options="f for f in panel.tooltip.limits"></select>
+    </div>
+    <div class="span3">
+      <label class="small">Sort values</label>
+      <select ng-change="set_refresh(true)" class="input-medium" ng-model="panel.tooltip.sort" ng-options="f for f in panel.tooltip.sorts"></select>
     </div>
   </div>
 

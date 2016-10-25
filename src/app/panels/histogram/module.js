@@ -119,6 +119,10 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
     $scope.init = function() {
       // Hide view options by default
       $scope.options = false;
+      $scope.panel.tooltip.sorts = ["ascending","descending"];
+      $scope.panel.tooltip.sort = $scope.panel.tooltip.sorts[0];
+      $scope.panel.tooltip.limits = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30];
+      $scope.panel.tooltip.limit = 15;
 
       // Start refresh timer if enabled
       if ($scope.panel.refresh.enable) {
@@ -232,7 +236,7 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
 
       var request = $scope.sjs.Request().indices(dashboard.indices[segment]);
       $scope.panel.queries.ids = querySrv.idsByMode($scope.panel.queries);
-      
+
 
       $scope.panel.queries.query = "";
       // Build the query
@@ -284,8 +288,8 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                   '&facet.range.gap=' + facet_gap;
       var values_mode_query = '';
 
-      // For mode = value
-      if($scope.panel.mode === 'values') {
+      // For mode = value || mode = summ
+      if($scope.panel.mode === 'values' || $scope.panel.mode === 'summ') {
         if (!$scope.panel.value_field) {
             $scope.panel.error = "In " + $scope.panel.mode + " mode a field must be specified";
             return;
@@ -295,12 +299,16 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
         rows_limit = '&rows=' + $scope.panel.max_rows;
         facet = '';
 
+        if ($scope.panel.tooltip.field && $scope.panel.tooltip.show_field_value) {
+            values_mode_query += ' ' + $scope.panel.tooltip.field;
+        }
+
         // if Group By Field is specified
         if ($scope.panel.group_field) {
           values_mode_query += '&group=true&group.field=' + $scope.panel.group_field + '&group.limit=' + $scope.panel.max_rows;
         }
       }
-      
+
       var mypromises = [];
        _.each($scope.panel.queries.ids, function(id) {
         var temp_q =  querySrv.getQuery(id) + wt_json + rows_limit + fq + facet + values_mode_query;
@@ -331,6 +339,7 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
           // if ($scope.query_id === query_id && _.difference(facetIds, $scope.panel.queries.ids).length === 0) {
             var i = 0,
               time_series,
+              tooltip_time_series,
               hits;
 
             _.each($scope.panel.queries.ids, function(id,index) {
@@ -348,6 +357,12 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                   end_date: _range && _range.to,
                   fill_style: 'minimal'
                 });
+                tooltip_time_series = new timeSeries.ZeroFilled({
+                  interval: _interval,
+                  start_date: _range && _range.from,
+                  end_date: _range && _range.to,
+                  fill_style: 'minimal'
+                });
                 hits = 0;
               } else {
                 time_series = $scope.data[i].time_series;
@@ -355,6 +370,7 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                 //   Solr don't need to accumulate hits count since it can get total count from facet query.
                 //   Therefore, I need to set hits and $scope.hits to zero.
                 // hits = $scope.data[i].hits;
+                tooltip_time_series = $scope.data[i].tooltip_time_series;
                 hits = 0;
                 $scope.hits = 0;
               }
@@ -433,9 +449,111 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                     hits: hits
                   };
                 }
+              } else if ($scope.panel.mode === 'summ') {
+                if (!$scope.panel.group_field) {
+                  entries = results[index].response.docs;
+                  var sumValueByDate = {};
+                  var sumTooltipByDate = {};
+                  var numberOfEntries = {};
+                  var allEntries = {};
+                  for (var j = 0; j < entries.length; j++) { // jshint ignore: line
+                    entry_time = new Date(entries[j][time_field]).getTime(); // convert to millisec
+                    entry_value = parseFloat(entries[j][$scope.panel.value_field]);
+                    if (entry_value != 0) {
+                      if (sumValueByDate[entry_time]) {
+                        sumValueByDate[entry_time] += entry_value;
+                      } else {
+                        sumValueByDate[entry_time] = entry_value;
+                      }
+                      if ($scope.panel.tooltip.field && $scope.panel.tooltip.show_field_value && entries[j][$scope.panel.tooltip.field]) {
+                        var entry_tooltip_value = "" + (angular.isArray(entries[j][$scope.panel.tooltip.field])
+                        ? entries[j][$scope.panel.tooltip.field][0]
+                        : entries[j][$scope.panel.tooltip.field]);
+                        var new_entry = {};
+                        new_entry.value=entry_value;
+                        new_entry.text=entry_tooltip_value;
+                        if (allEntries[entry_time]) {
+                          allEntries[entry_time].push(new_entry);
+                        } else {
+                          allEntries[entry_time]=[new_entry];
+                        }
+                      }
+                    }
+                    hits += 1;
+                    $scope.hits += 1;
+                  }
+                  var limit;
+                  if ($scope.panel.tooltip.limit) {
+                    limit = $scope.panel.tooltip.limit
+                  } else {
+                    limit = $scope.panel.tooltip.limits.length/2;
+                  }
+                  for (var key in allEntries) {
+                    var ended = false;
+                    var entry_array = allEntries[key];
+                    if (entry_array.length > 1 && $scope.panel.tooltip.sort) {
+                      if ($scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[1]) { // descending order
+                        entry_array.sort(function (a, b) {
+                          if (a.value < b.value) {
+                            return 1;
+                          }
+                          if (a.value > b.value) {
+                            return -1;
+                          }
+                          return 0;
+                        });
+                      } else if ($scope.panel.tooltip.sort == $scope.panel.tooltip.sorts[0]) { // ascending order
+                        entry_array.sort(function (a, b) {
+                          if (a.value > b.value) {
+                            return 1;
+                          }
+                          if (a.value < b.value) {
+                            return -1;
+                          }
+                          return 0;
+                        });
+                      }
+                    }
+                    for (var k = 0; k < entry_array.length; k++) {
+                      if ( (numberOfEntries[key] == undefined || numberOfEntries[key] < limit)) {
+                        if (entry_array[k].text.split(" ").length > 7) {
+                          entry_array[k].text = entry_array[k].text.split(/\s+/).slice(0,7).join(" ");
+                          entry_array[k].text += "...";
+                        }
+                        if (sumTooltipByDate[key]) {
+                          sumTooltipByDate[key] += '<small style="font-size:0.9em;">' +
+                          entry_array[k].value + ': ' + entry_array[k].text +
+                          '</small><br>';
+                          numberOfEntries[key] += 1;
+                        } else {
+                          sumTooltipByDate[key] = '<br><small style="font-size:0.9em;">' +
+                          entry_array[k].value + ': ' + entry_array[k].text +
+                          '</small><br>';
+                          numberOfEntries[key] = 1;
+                        }
+                      } else if (!ended) {
+                        sumTooltipByDate[key] += '<br><small style="font-size:0.9em;">' +
+                        '+ Another ' + (entry_array.length - limit) + ' entries not shown!' +
+                        '</small>';
+                        ended = true;
+                      }
+                    }
+                  }
+
+                  for (var key in sumValueByDate) {
+                    time_series.addValue(key, sumValueByDate[key]);
+                    tooltip_time_series.addValue(key, sumTooltipByDate[key]);
+                  }
+                  $scope.data[i] = {
+                    info: querySrv.list[id],
+                    time_series: time_series,
+                    tooltip_time_series: tooltip_time_series,
+                    hits: hits
+                  };
+                }
               }
 
-              if ($scope.panel.mode !== 'values') {
+              if ($scope.panel.mode !== 'summ') {
                 $scope.data[i] = {
                   info: querySrv.list[id],
                   time_series: time_series,
@@ -663,13 +781,13 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
 
         var $tooltip = $('<div>');
         elem.bind("plothover", function (event, pos, item) {
-          var group, value;
+          var group, value, field;
           if (item) {
             if (item.series.info.alias || scope.panel.tooltip.query_as_alias) {
-              group = '<small style="font-size:0.9em;">' +
+              group = '<span class="small">' +
                 '<i class="icon-circle" style="color:'+item.series.color+';"></i>' + ' ' +
                 (item.series.info.alias || item.series.info.query)+
-              '</small><br>';
+              '</span><br>';
             } else {
               group = kbn.query_color_dot(item.series.color, 15) + ' ';
             }
@@ -678,13 +796,19 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
             } else {
               value = item.datapoint[1];
             }
+            if (scope.panel.mode === 'summ' && scope.panel.tooltip.field && scope.panel.tooltip.show_field_value) {
+              field = '<span class="small">' +
+              item.series.tooltip_time_series._data[item.datapoint[0]] +
+              '</span><br>';
+            } else {
+                field = '';
+            }
 
             var lnLastValue = value;
 
             var lbPositiveValue = (lnLastValue>0);
 
-            var lsItemTT = group + dashboard.numberWithCommas(value) + " @ " + (scope.panel.timezone === 'utc'? moment.utc(item.datapoint[0]).format('MM/DD HH:mm:ss') : moment(item.datapoint[0]).format('MM/DD HH:mm:ss'));
-
+            var lsItemTT = group + dashboard.numberWithCommas(value) + " @ " + (scope.panel.timezone === 'utc'? moment.utc(item.datapoint[0]).format('MM/DD HH:mm:ss') : moment(item.datapoint[0]).format('MM/DD HH:mm:ss')) + field;
             var hoverSeries = item.series;
             var x = item.datapoint[0];
                 // y = item.datapoint[1];
@@ -742,7 +866,7 @@ function (angular, app, $, _, kbn, moment, timeSeries) {
                     group = kbn.query_color_dot(s.color, 15) + ' ';
                   }
 
-                  lsItemTT = group + dashboard.numberWithCommas(value) + " @ " + (scope.panel.timezone === 'utc'? moment.utc(p[0]).format('MM/DD HH:mm:ss') : moment(p[0]).format('MM/DD HH:mm:ss'));
+                  lsItemTT = group + dashboard.numberWithCommas(value) + " @ " + (scope.panel.timezone === 'utc'? moment.utc(p[0]).format('MM/DD HH:mm:ss') : moment(p[0]).format('MM/DD HH:mm:ss')) + field;
                   lsTT = lsTT +"</br>"+ lsItemTT;
                   break;
                 }
